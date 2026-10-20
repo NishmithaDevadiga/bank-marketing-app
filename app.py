@@ -1,80 +1,161 @@
 import streamlit as st
 import pandas as pd
-from sklearn.ensemble import RandomForestClassifier
+import joblib
 
-# 1. Page Configuration
+# Load trained model and fitted preprocessor
+model = joblib.load("random_forest_model.pkl")
+preprocessor = joblib.load("preprocessor.pkl")
+
 st.set_page_config(
     page_title="Bank Marketing Prediction",
     page_icon="🏦",
-    layout="centered"
+    layout="wide"
 )
 
-st.title("🏦 Bank Marketing Prediction App")
-st.write("Predict whether a bank customer will subscribe to a term deposit.")
+st.title("🏦 Bank Marketing Prediction")
+st.write(
+    "Predict whether a customer is likely to subscribe "
+    "to a term deposit using a Random Forest classifier."
+)
 
-# 2. Train a quick model with expanded sample features
-@st.cache_resource
-def train_model():
-    data = {
-        'balance': [1500, 3200, 400, 8500, 1200, 4300, 2100, 5000],
-        'housing': ['yes', 'no', 'yes', 'no', 'yes', 'no', 'yes', 'no'],
-        'loan': ['no', 'no', 'yes', 'no', 'no', 'yes', 'no', 'no'],
-        'duration': [200, 150, 300, 100, 250, 180, 220, 290],
-        'campaign': [1, 2, 1, 3, 2, 1, 4, 2],
-        'subscribed': [0, 1, 0, 1, 0, 1, 0, 1]
-    }
-    df = pd.DataFrame(data)
-    
-    # Convert categorical text to numeric for the random forest model
-    df_encoded = pd.get_dummies(df, columns=['housing', 'loan'])
-    
-    X = df_encoded.drop(columns=['subscribed'])
-    y = df_encoded['subscribed']
-    
-    model = RandomForestClassifier(random_state=42)
-    model.fit(X, y)
-    return model, X.columns
+st.divider()
 
-model, feature_columns = train_model()
+with st.form("customer_form"):
+    st.subheader("Enter Customer Details")
 
-# 3. Customer Input Form (Matching your friend's style!)
-st.subheader("Enter Customer Details")
-
-with st.form("prediction_form"):
     col1, col2 = st.columns(2)
-    
-    with col1:
-        balance = st.number_input("Average Yearly Balance", value=1000)
-        housing = st.selectbox("Housing Loan", options=["yes", "no"])
-        loan = st.selectbox("Personal Loan", options=["yes", "no"])
-        
-    with col2:
-        duration = st.number_input("Last Contact Duration (seconds)", value=250)
-        campaign = st.number_input("Previous Contacts / Campaign", value=1, min_value=1, max_value=10)
-    
-    submitted = st.form_submit_button("Predict Subscription", type="primary")
 
-# 4. Make Prediction
+    with col1:
+        age = st.number_input(
+            "Age", min_value=18, max_value=100, value=35
+        )
+        job = st.selectbox(
+            "Job",
+            [
+                "admin.", "blue-collar", "entrepreneur",
+                "housemaid", "management", "retired",
+                "self-employed", "services", "student",
+                "technician", "unemployed", "unknown"
+            ]
+        )
+        marital = st.selectbox(
+            "Marital Status",
+            ["married", "single", "divorced"]
+        )
+        education = st.selectbox(
+            "Education",
+            ["secondary", "tertiary", "primary", "unknown"]
+        )
+        default = st.selectbox(
+            "Credit in Default", ["no", "yes"]
+        )
+        balance = st.number_input(
+            "Average Yearly Balance", value=1000
+        )
+        housing = st.selectbox(
+            "Housing Loan", ["yes", "no"]
+        )
+        loan = st.selectbox(
+            "Personal Loan", ["no", "yes"]
+        )
+
+    with col2:
+        contact = st.selectbox(
+            "Contact Type",
+            ["cellular", "telephone", "unknown"]
+        )
+        day = st.number_input(
+            "Last Contact Day",
+            min_value=1, max_value=31, value=15
+        )
+        month = st.selectbox(
+            "Last Contact Month",
+            [
+                "jan", "feb", "mar", "apr", "may", "jun",
+                "jul", "aug", "sep", "oct", "nov", "dec"
+            ]
+        )
+        duration = st.number_input(
+            "Last Call Duration (seconds)",
+            min_value=0, value=180
+        )
+        campaign = st.number_input(
+            "Contacts During This Campaign",
+            min_value=1, value=1
+        )
+        pdays = st.number_input(
+            "Days Since Previous Contact",
+            min_value=-1, value=-1
+        )
+        previous = st.number_input(
+            "Previous Contacts",
+            min_value=0, value=0
+        )
+        poutcome = st.selectbox(
+            "Previous Campaign Outcome",
+            ["unknown", "failure", "other", "success"]
+        )
+
+    submitted = st.form_submit_button(
+        "Predict Subscription",
+        use_container_width=True
+    )
+
 if submitted:
-    # Create input dataframe and encode it identically to training columns
-    input_data = pd.DataFrame({
-        'balance': [balance],
-        'duration': [duration],
-        'campaign': [campaign],
-        'housing_yes': [1 if housing == 'yes' else 0],
-        'housing_no': [1 if housing == 'no' else 0],
-        'loan_yes': [1 if loan == 'yes' else 0],
-        'loan_no': [1 if loan == 'no' else 0]
-    })
-    
-    # Ensure columns match what the model expects
-    input_data = input_data.reindex(columns=feature_columns, fill_value=0)
-    
-    prediction = model.predict(input_data)[0]
-    probability = model.predict_proba(input_data)[0][1]
-    
-    st.subheader("Prediction Result")
-    if prediction == 1:
-        st.success(f"🎉 High chance! The customer is likely to subscribe (Probability: {probability * 100:.1f}%)")
-    else:
-        st.info(f"ℹ️ Low chance. The customer is unlikely to subscribe (Probability: {probability * 100:.1f}%)")
+    customer = pd.DataFrame([{
+        "age": age,
+        "job": job,
+        "marital": marital,
+        "education": education,
+        "default": default,
+        "balance": balance,
+        "housing": housing,
+        "loan": loan,
+        "contact": contact,
+        "day": day,
+        "month": month,
+        "duration": duration,
+        "campaign": campaign,
+        "pdays": pdays,
+        "previous": previous,
+        "poutcome": poutcome
+    }])
+
+    try:
+        # Apply the same preprocessing used during training
+        customer_processed = preprocessor.transform(customer)
+
+        # Predict the class
+        prediction = model.predict(customer_processed)[0]
+
+        # Get probability for class 1 (subscription = yes)
+        probabilities = model.predict_proba(customer_processed)[0]
+        class_index = list(model.classes_).index(1)
+        probability = probabilities[class_index] * 100
+
+        st.divider()
+        st.subheader("Prediction Result")
+
+        if prediction == 1:
+            st.success(
+                "The model predicts that the customer "
+                "is likely to subscribe."
+            )
+        else:
+            st.warning(
+                "The model predicts that the customer "
+                "is unlikely to subscribe."
+            )
+
+        st.metric(
+            "Estimated Subscription Probability",
+            f"{probability:.2f}%"
+        )
+
+        st.caption(
+            "Predictions are estimates and do not guarantee "
+            "actual customer behavior."
+        )
+
+    except Exception as e:
+        st.error(f"Prediction error: {e}")
