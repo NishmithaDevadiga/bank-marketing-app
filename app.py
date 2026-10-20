@@ -12,43 +12,63 @@ st.set_page_config(
 st.title("🏦 Bank Marketing Prediction App")
 st.write("Predict whether a bank customer will subscribe to a term deposit.")
 
-# 2. Create a quick synthetic/sample dataset directly in code (No CSV needed!)
+# 2. Train a quick model with expanded sample features
 @st.cache_resource
-def train_quick_model():
-    # Sample training data representing bank customer features
+def train_model():
     data = {
-        'age': [30, 45, 28, 55, 39, 50, 32, 41],
         'balance': [1500, 3200, 400, 8500, 1200, 4300, 2100, 5000],
+        'housing': ['yes', 'no', 'yes', 'no', 'yes', 'no', 'yes', 'no'],
+        'loan': ['no', 'no', 'yes', 'no', 'no', 'yes', 'no', 'no'],
         'duration': [200, 150, 300, 100, 250, 180, 220, 290],
         'campaign': [1, 2, 1, 3, 2, 1, 4, 2],
         'subscribed': [0, 1, 0, 1, 0, 1, 0, 1]
     }
     df = pd.DataFrame(data)
     
-    X = df[['age', 'balance', 'duration', 'campaign']]
-    y = df['subscribed']
+    # Convert categorical text to numeric for the random forest model
+    df_encoded = pd.get_dummies(df, columns=['housing', 'loan'])
+    
+    X = df_encoded.drop(columns=['subscribed'])
+    y = df_encoded['subscribed']
     
     model = RandomForestClassifier(random_state=42)
     model.fit(X, y)
-    return model
+    return model, X.columns
 
-model = train_quick_model()
+model, feature_columns = train_model()
 
-# 3. Customer Input Form
+# 3. Customer Input Form (Matching your friend's style!)
 st.subheader("Enter Customer Details")
 
 with st.form("prediction_form"):
-    age = st.slider("Age", 18, 90, 35)
-    balance = st.number_input("Account Balance (Euros)", value=1000)
-    duration = st.number_input("Last Contact Duration (seconds)", value=250)
-    campaign = st.slider("Campaign Contacts", 1, 10, 1)
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        balance = st.number_input("Average Yearly Balance", value=1000)
+        housing = st.selectbox("Housing Loan", options=["yes", "no"])
+        loan = st.selectbox("Personal Loan", options=["yes", "no"])
+        
+    with col2:
+        duration = st.number_input("Last Contact Duration (seconds)", value=250)
+        campaign = st.number_input("Previous Contacts / Campaign", value=1, min_value=1, max_value=10)
     
     submitted = st.form_submit_button("Predict Subscription", type="primary")
 
 # 4. Make Prediction
 if submitted:
-    input_data = pd.DataFrame([[age, balance, duration, campaign]], 
-                              columns=['age', 'balance', 'duration', 'campaign'])
+    # Create input dataframe and encode it identically to training columns
+    input_data = pd.DataFrame({
+        'balance': [balance],
+        'duration': [duration],
+        'campaign': [campaign],
+        'housing_yes': [1 if housing == 'yes' else 0],
+        'housing_no': [1 if housing == 'no' else 0],
+        'loan_yes': [1 if loan == 'yes' else 0],
+        'loan_no': [1 if loan == 'no' else 0]
+    })
+    
+    # Ensure columns match what the model expects
+    input_data = input_data.reindex(columns=feature_columns, fill_value=0)
     
     prediction = model.predict(input_data)[0]
     probability = model.predict_proba(input_data)[0][1]
